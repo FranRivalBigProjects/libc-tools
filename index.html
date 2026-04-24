@@ -1,112 +1,1004 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Libc Tools – glibc vs musl, Memory & System Call Analysis</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="google-site-verification" content="PkLa_ViOo6FAHpvh8SacceMb95o9tePRdrqLNBz9X1M" />
+<meta name="robots" content="index, follow">
 
-  <!-- Google verification -->
-  <meta name="google-site-verification" content="PkLa_ViOo6FAHpvh8SacceMb95o9tePRdrqLNBz9X1M" />
+<title>glibc vs musl Performance – Interactive Comparison Tool</title>
 
-  <!-- SEO -->
-  <meta name="description" content="Libc tools for analyzing glibc vs musl performance, exploring libc functions, testing memory operations, and understanding system call wrappers.">
-  <meta name="keywords" content="libc tools, glibc vs musl performance, libc functions list, memory functions c memcpy memset, system call wrapper explained libc">
+<meta name="description" content="Interactive glibc vs musl performance comparison. Compare memory allocation, string operations, threading, and startup time. Understand when to choose musl or glibc for Docker, embedded, and server workloads.">
 
-  <!-- AdSense -->
-  <meta name="google-adsense-account" content="ca-pub-XXXXXXXXXXXXXXXX">
+<meta name="keywords" content="glibc vs musl, musl vs glibc, glibc vs musl performance, musl vs glibc performance, musl glibc comparison, glibc musl benchmark, musl vs glibc docker, alpine linux musl glibc, musl libc performance, glibc performance comparison">
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="Libc Tools – glibc, musl & Low-Level C Analysis">
-  <meta property="og:description" content="Explore libc functions, memory operations, and system call behavior.">
-  <meta property="og:type" content="website">
+<link rel="canonical" href="https://franrivalbigprojects.github.io/libc-tools/">
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #020617;
-      color: #e2e8f0;
-      margin: 0;
-      padding: 40px;
+<meta property="og:title" content="glibc vs musl Performance – Interactive Comparison Tool">
+<meta property="og:description" content="Compare glibc and musl performance across memory allocation, string ops, threading, and startup. Understand when each wins.">
+<meta property="og:type" content="website">
+
+<meta name="google-adsense-account" content="ca-pub-XXXXXXXXXXXXXXXX">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #060a10;
+  --surface: #0a0f1a;
+  --surface2: #0e1520;
+  --border: #141f30;
+  --border-light: #1c2d42;
+  --blue: #3b82f6;
+  --blue-dim: rgba(59,130,246,0.1);
+  --blue-dim2: rgba(59,130,246,0.05);
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,0.1);
+  --orange: #f97316;
+  --orange-dim: rgba(249,115,22,0.08);
+  --red: #ef4444;
+  --red-dim: rgba(239,68,68,0.08);
+  --yellow: #eab308;
+  --yellow-dim: rgba(234,179,8,0.08);
+  --text: #cbd5e1;
+  --text-muted: #475569;
+  --text-dim: #1e3048;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── HEADER ─── */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(6,10,16,0.96);
+  backdrop-filter: blur(10px);
+}
+
+.header-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.logo-mark {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--blue-dim2);
+  border: 1px solid rgba(59,130,246,0.2);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+.logo-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.logo-text strong { color: var(--blue); font-weight: 500; }
+
+/* ─── WRAPPER ─── */
+.wrapper {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── HERO ─── */
+.hero {
+  padding: 48px 0 36px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 36px;
+}
+
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-eyebrow::before {
+  content: '';
+  width: 16px;
+  height: 1px;
+  background: var(--blue);
+  opacity: 0.5;
+}
+
+h1 {
+  font-size: clamp(22px, 3.5vw, 30px);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+  margin-bottom: 14px;
+  letter-spacing: -0.02em;
+}
+
+h1 em { font-style: normal; color: var(--blue); }
+
+.hero-sub {
+  font-size: 15px;
+  color: var(--text-muted);
+  max-width: 620px;
+  line-height: 1.75;
+  margin-bottom: 22px;
+}
+
+.hero-sub strong { color: var(--text); }
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+}
+
+.badge.blue {
+  color: var(--blue);
+  background: var(--blue-dim2);
+  border-color: rgba(59,130,246,0.25);
+}
+
+/* ─── TOOL ─── */
+.tool-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.tool-head {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tool-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ─── CATEGORY TABS ─── */
+.cat-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  background: var(--surface2);
+}
+
+.cat-tab {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 10px 18px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.cat-tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+  background: var(--blue-dim2);
+}
+
+.cat-tab:hover:not(.active) { color: var(--text); }
+
+/* ─── BENCHMARK TABLE ─── */
+.bench-body { padding: 20px; }
+
+.bench-intro {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  line-height: 1.7;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  border-left: 3px solid var(--blue);
+}
+
+.bench-intro strong { color: var(--text); }
+
+.bench-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.bench-table th {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--border);
+  background: var(--surface2);
+}
+
+.bench-table th.col-glibc { color: var(--blue); }
+.bench-table th.col-musl { color: var(--green); }
+
+.bench-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+
+.bench-table tr:last-child td { border-bottom: none; }
+.bench-table tr:hover td { background: rgba(59,130,246,0.03); }
+
+.op-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.op-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.val-cell {
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* winner badges */
+.winner { font-weight: 600; }
+.win-glibc { color: var(--blue); }
+.win-musl { color: var(--green); }
+.win-tie { color: var(--yellow); }
+
+.bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.bar-bg {
+  flex: 1;
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.verdict-cell {
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 200px;
+}
+
+.verdict-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid;
+  white-space: nowrap;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.vb-glibc { color: var(--blue); background: var(--blue-dim2); border-color: rgba(59,130,246,0.2); }
+.vb-musl { color: var(--green); background: var(--green-dim); border-color: rgba(34,197,94,0.2); }
+.vb-tie { color: var(--yellow); background: var(--yellow-dim); border-color: rgba(234,179,8,0.2); }
+
+/* ─── USE CASE GRID ─── */
+.usecase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.usecase-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.uc-context {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+}
+
+.uc-rec {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.uc-rec.glibc { color: var(--blue); }
+.uc-rec.musl { color: var(--green); }
+.uc-rec.either { color: var(--yellow); }
+
+.uc-reason {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ─── DIVIDER ─── */
+hr.divider { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+
+/* ─── CONTENT ─── */
+.content-section { margin-bottom: 48px; }
+
+.section-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--blue);
+  opacity: 0.7;
+  margin-bottom: 8px;
+  display: block;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 14px;
+  letter-spacing: -0.01em;
+}
+
+p {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.8;
+  margin-bottom: 12px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--surface2);
+  color: var(--blue);
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid var(--border-light);
+}
+
+/* ─── DENSE BLOCK ─── */
+.dense-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-top: 16px;
+}
+
+.dense-block p {
+  font-size: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.8;
+}
+
+.dense-block p:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+.dense-block strong { color: var(--text); }
+
+/* ─── FAQ ─── */
+.faq-list {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.faq-item { border-bottom: 1px solid var(--border); }
+.faq-item:last-child { border-bottom: none; }
+
+.faq-q {
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: none;
+  padding: 15px 20px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: var(--sans);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: background 0.15s;
+  font-weight: 500;
+}
+
+.faq-q:hover { background: var(--blue-dim2); }
+
+.faq-arrow {
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  font-family: var(--mono);
+}
+
+.faq-item.open .faq-arrow { transform: rotate(180deg); }
+
+.faq-a {
+  display: none;
+  padding: 0 20px 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.75;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.faq-item.open .faq-a { display: block; }
+
+/* ─── OTHER TOOLS ─── */
+.other-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.other-tool-link {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+  display: block;
+}
+
+.other-tool-link:hover {
+  border-color: rgba(59,130,246,0.3);
+  background: var(--blue-dim2);
+}
+
+.otl-eye {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 5px;
+}
+
+.otl-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--blue);
+  font-weight: 500;
+}
+
+/* ─── FOOTER ─── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 22px 0;
+  position: relative;
+  z-index: 1;
+}
+
+.footer-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+footer p {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .bench-table { font-size: 11px; }
+  .bench-table th, .bench-table td { padding: 8px 10px; }
+  .verdict-cell { display: none; }
+  .hero { padding: 32px 0 24px; }
+}
+</style>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "glibc vs musl Performance Comparison Tool",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Web",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "description": "Interactive glibc vs musl performance comparison tool. Compare memory allocation, string operations, threading, startup time, and binary size across categories. Understand when to choose musl or glibc for Docker Alpine, embedded systems, and server workloads.",
+  "featureList": "glibc vs musl benchmark comparison, memory allocation performance, string operations comparison, thread creation timing, startup time comparison, Docker Alpine musl analysis, use case recommendations"
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is glibc faster than musl?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "For most operations, glibc is faster than musl. glibc uses highly optimized SIMD implementations for string operations (memcpy, strlen, strchr) and a tuned ptmalloc allocator that outperforms musl's allocator under contention. However, musl is significantly faster for static binary startup time (234µs vs 457µs) and has better performance on UTF-8 decoding. The performance gap matters most in hot loops — for typical server applications, the difference is negligible."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Should I use musl or glibc for Docker containers?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "For Docker containers, the choice depends on your priority. Alpine Linux (musl) gives you the smallest images (5MB base vs 80MB+ for Debian/Ubuntu), faster image pulls, and a smaller attack surface. However, glibc-compiled binaries don't run on musl without recompilation — this can break some npm packages, Python extensions, and precompiled binaries. For greenfield Go or Rust projects, musl is excellent. For Node.js, Python, or anything with native extensions, glibc (Debian/Ubuntu base) avoids compatibility issues."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the main difference between glibc and musl?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "glibc (GNU C Library) is the most feature-complete, widely compatible C standard library — used by default on Ubuntu, Fedora, and most major Linux distributions. It includes everything: NIS, Sun RPC, gconv character conversions, extensive debugging features, and symbol versioning for binary compatibility. musl is a lightweight, standards-focused alternative used in Alpine Linux, embedded systems, and static binaries. musl has a significantly smaller binary footprint (527KB .so vs 7.9MB for glibc), better POSIX conformance, and cleaner error handling — but less feature breadth and no POSIX localedef."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why is musl better for static binaries?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A static hello world with musl is 13KB vs 662KB with glibc. This happens because glibc was designed for dynamic linking and pulls in a large dependency graph even for simple programs. musl was designed with static linking as a first-class use case — its allocator, stdio, and threading implementations are all self-contained with no hidden dependencies. This makes musl the standard choice for Go, Rust, and C programs distributed as single static binaries."
+      }
     }
-    h1 {
-      color: #60a5fa;
-    }
-    p {
-      max-width: 1000px;
-      line-height: 1.6;
-    }
-    .tools {
-      margin-top: 30px;
-    }
-    .tool {
-      background: #1e293b;
-      padding: 12px;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      transition: 0.2s;
-    }
-    .tool:hover {
-      background: #334155;
-    }
-    a {
-      color: #22c55e;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-  </style>
+  ]
+}
+</script>
+
 </head>
+
 <body>
 
-  <h1>Libc Tools</h1>
+<header>
+  <div class="header-inner">
+    <span class="logo-mark">libc</span>
+    <span class="logo-text"><strong>glibc-vs-musl</strong>-performance</span>
+  </div>
+</header>
 
-  <p>
-    A collection of low-level tools for analyzing the C standard library (libc),
-    including performance comparisons between glibc and musl, memory operations,
-    and system call wrappers.
-  </p>
+<div class="wrapper">
 
-  <p>
-    These tools help developers understand how user-space programs interact
-    with the operating system and optimize performance-critical code.
-  </p>
+  <!-- HERO -->
 
-  <div class="tools">
+  <section class="hero">
+    <p class="hero-eyebrow">Free Systems Programming Tool</p>
+    <h1><em>glibc vs musl</em> Performance —<br>Interactive Benchmark Comparison</h1>
+    <p class="hero-sub">
+      Compare <strong>glibc and musl</strong> performance across memory allocation, string operations, threading, and startup time. Understand which C standard library wins for your workload — <strong>Docker Alpine, embedded systems, static binaries, or servers.</strong>
+    </p>
+    <div class="badges">
+      <span class="badge blue">glibc vs musl</span>
+      <span class="badge blue">Performance benchmarks</span>
+      <span class="badge">Memory allocation</span>
+      <span class="badge">String operations</span>
+      <span class="badge">Docker / Alpine</span>
+      <span class="badge">Free · No login</span>
+    </div>
+  </section>
 
-    <div class="tool"><a href="./glibc-vs-musl-performance-tool/">glibc vs musl Performance Tool</a></div>
-    <div class="tool"><a href="./libc-function-explorer/">Libc Function Explorer</a></div>
-    <div class="tool"><a href="./libc-memory-function-tester/">Memory Function Tester</a></div>
-    <div class="tool"><a href="./system-call-wrapper-analyzer/">System Call Wrapper Analyzer</a></div>
+  <!-- TOOL -->
+
+  <div class="tool-wrap">
+    <div class="tool-head">
+      <span class="tool-title">// glibc vs musl Performance Comparison</span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);">Data: etalabs.net benchmarks + community measurements</span>
+    </div>
+
+
+<!-- Category tabs -->
+<div class="cat-tabs" id="catTabs">
+  <button class="cat-tab active" onclick="showCat('memory')" id="tab-memory">Memory Alloc</button>
+  <button class="cat-tab" onclick="showCat('strings')" id="tab-strings">String Ops</button>
+  <button class="cat-tab" onclick="showCat('threads')" id="tab-threads">Threading</button>
+  <button class="cat-tab" onclick="showCat('startup')" id="tab-startup">Startup & Size</button>
+  <button class="cat-tab" onclick="showCat('features')" id="tab-features">Features</button>
+</div>
+
+<div class="bench-body" id="benchBody"></div>
+
 
   </div>
 
-  <!-- SEO LONG TAIL -->
-  <h2>Common Libc & Low-Level C Queries</h2>
+  <!-- USE CASE RECOMMENDATIONS -->
 
-  <ul>
-    <li>glibc vs musl performance differences benchmarks</li>
-    <li>libc functions list and usage examples c programming</li>
-    <li>how memcpy and memset work internally explained</li>
-    <li>system call wrapper libc vs direct syscall difference</li>
-    <li>optimize memory operations c performance guide</li>
-    <li>difference between glibc and musl linux systems</li>
-    <li>how libc interacts with kernel syscalls explained</li>
-  </ul>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:36px;">
+    <p style="font-family:var(--mono);font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;">// When to choose each</p>
+    <div class="usecase-grid">
+      <div class="usecase-card">
+        <p class="uc-context" style="color:var(--green);">Alpine / Docker //</p>
+        <p class="uc-rec musl">Choose musl</p>
+        <p class="uc-reason">5MB base image vs 80MB+. Faster pulls, smaller attack surface. Best for Go and Rust services.</p>
+      </div>
+      <div class="usecase-card">
+        <p class="uc-context" style="color:var(--blue);">Server / Ubuntu //</p>
+        <p class="uc-rec glibc">Choose glibc</p>
+        <p class="uc-reason">Better raw performance on string ops and malloc. Full compatibility with Python, Node.js native extensions.</p>
+      </div>
+      <div class="usecase-card">
+        <p class="uc-context" style="color:var(--green);">Static Binary //</p>
+        <p class="uc-rec musl">Choose musl</p>
+        <p class="uc-reason">13KB static hello world vs 662KB with glibc. Designed for static linking as a first-class use case.</p>
+      </div>
+      <div class="usecase-card">
+        <p class="uc-context" style="color:var(--green);">Embedded //</p>
+        <p class="uc-rec musl">Choose musl</p>
+        <p class="uc-reason">527KB .so vs 7.9MB for glibc. Supports MMU-less microcontrollers. Clean POSIX conformance.</p>
+      </div>
+      <div class="usecase-card">
+        <p class="uc-context" style="color:var(--blue);">Node.js / Python //</p>
+        <p class="uc-rec glibc">Choose glibc</p>
+        <p class="uc-reason">Native extensions (.node, .so) are compiled for glibc. Using musl/Alpine breaks many npm and pip packages.</p>
+      </div>
+      <div class="usecase-card">
+        <p class="uc-context" style="color:var(--yellow);">Rust / Go //</p>
+        <p class="uc-rec either">Either works</p>
+        <p class="uc-reason">Both support musl targets. Rust: use x86_64-unknown-linux-musl. Go: CGO_ENABLED=0 produces musl-compatible binaries.</p>
+      </div>
+    </div>
+  </div>
 
-  <p>
-    These tools are ideal for systems programmers, performance engineers,
-    and developers working close to the operating system layer.
-  </p>
+  <hr class="divider">
 
-  <!-- snippet SEO -->
-  <pre>
-#include &lt;string.h&gt;
+  <!-- WHAT IS THE DIFFERENCE -->
 
-memcpy(dest, src, size);
-memset(buffer, 0, size);
-  </pre>
+  <section class="content-section">
+    <span class="section-eyebrow">// Core concept</span>
+    <h3>glibc vs musl — What Is the Difference?</h3>
+    <p>
+      <strong>glibc</strong> (GNU C Library) is the default C standard library on Ubuntu, Fedora, Debian, and most major Linux distributions. It is the most feature-complete implementation — including NIS, Sun RPC, gconv character conversions, extensive debugging support, and symbol versioning for long-term binary compatibility. glibc prioritizes performance and backwards compatibility above all else, with SIMD-optimized implementations of string and memory functions for x86_64.
+    </p>
+    <p>
+      <strong>musl</strong> is a lightweight, standards-focused alternative created by Rich Felker in 2011, now used as the default libc in Alpine Linux, Void Linux, and many embedded distributions. musl was designed with correctness, static linking, and minimal footprint as first-class priorities. Its complete <code>.so</code> set is 527KB versus glibc's 7.9MB. A static hello world compiled against musl is 13KB; against glibc it's 662KB.
+    </p>
+    <p>
+      The performance difference is real but context-dependent. glibc wins on string operations (highly tuned SIMD), memory allocation throughput, and raw compute. musl wins on static binary size, startup time, UTF-8 correctness, and clean failure behavior on resource exhaustion — where glibc often aborts while musl reports failure gracefully.
+    </p>
+  </section>
+
+  <hr class="divider">
+
+  <!-- WHAT DEVS ASK -->
+
+  <section class="content-section">
+    <span class="section-eyebrow">// Community questions</span>
+    <h3>What Developers Ask About glibc vs musl Performance</h3>
+    <div class="dense-block">
+      <p><strong>Why is Alpine Linux so much smaller than Ubuntu in Docker?</strong><br>
+      Alpine uses musl libc and BusyBox instead of glibc and GNU coreutils. The Alpine base image is ~5MB; Ubuntu is ~80MB. musl's smaller binary footprint is the primary driver — glibc's complete .so set is 7.9MB alone. For production Docker images this matters: smaller images mean faster CI/CD pulls, lower registry storage costs, and a smaller attack surface for security scanning. The trade-off is compatibility — any binary compiled against glibc won't run on Alpine without recompilation.</p>
+
+
+  <p><strong>Does musl actually hurt performance in production?</strong><br>
+  For most web services and APIs, the performance difference is unmeasurable in practice. The etalabs benchmarks show glibc is faster on memset (0.012 vs 0.023 normalized), strchr (0.028 vs 0.142), and malloc under contention. But these are micro-benchmarks of tight loops. Real application performance is dominated by I/O, database queries, and network latency — not libc string operations. The teams reporting actual slowdowns with musl are typically running compute-heavy workloads: image processing, cryptography, or numerical code that spends significant time in string/memory functions.</p>
+
+  <p><strong>Why do some npm packages break on Alpine Linux?</strong><br>
+  Node.js native addons (<code>.node</code> files) are compiled C/C++ shared libraries that link against glibc by default. When you run them on Alpine (musl), they fail to load because musl and glibc have different ABI conventions, different symbol names, and different behaviors for some functions. The most common failures are in packages that use native bindings: bcrypt, sharp, canvas, sqlite3, and various database drivers. The fix is either to use pure-JS alternatives, rebuild from source on Alpine, or switch to a Debian/Ubuntu base image.</p>
+
+  <p><strong>What is the musl vs glibc performance difference for Rust binaries?</strong><br>
+  Rust can target both <code>x86_64-unknown-linux-gnu</code> (glibc) and <code>x86_64-unknown-linux-musl</code> (musl). For typical Rust applications that don't do heavy C interop, the performance difference is negligible — Rust's standard library implements most operations itself. The main reason to use the musl target is to produce fully static binaries that run on any Linux system without dependency on a specific glibc version. The downside: musl-linked Rust binaries can be slower for allocator-heavy code because musl's allocator is less optimized than glibc's ptmalloc under high concurrency.</p>
+</div>
+
+
+  </section>
+
+  <hr class="divider">
+
+  <!-- FAQ -->
+
+  <section class="content-section">
+    <span class="section-eyebrow">// FAQ</span>
+    <h3>Frequently Asked Questions</h3>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Is glibc faster than musl?<span class="faq-arrow">▾</span></button>
+        <div class="faq-a">For most micro-benchmarks, yes — glibc uses SIMD-optimized string operations and a tuned malloc that outperform musl. However, musl is faster for static binary startup and UTF-8 decoding. For real-world server applications, the difference is typically negligible.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Should I use musl or glibc for Docker?<span class="faq-arrow">▾</span></button>
+        <div class="faq-a">Use musl (Alpine) when image size matters and you control the entire stack — Go, Rust, or statically compiled C work great. Use glibc (Debian/Ubuntu) when you have native extensions (Python, Node.js), precompiled binaries, or need maximum compatibility.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">What is musl libc used for?<span class="faq-arrow">▾</span></button>
+        <div class="faq-a">musl is the default libc in Alpine Linux (used heavily in Docker), Void Linux, and many embedded Linux distributions. It's also the preferred libc for static binary distribution, cross-compilation, and security-focused builds where glibc's large feature surface is unnecessary.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Why are musl static binaries smaller?<span class="faq-arrow">▾</span></button>
+        <div class="faq-a">musl was designed with static linking as a primary use case. It has no hidden dependencies and a minimal implementation surface. A static hello world is 13KB with musl vs 662KB with glibc — glibc pulls in a large dependency graph even for trivial programs because it was designed for dynamic linking.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Can glibc binaries run on musl systems?<span class="faq-arrow">▾</span></button>
+        <div class="faq-a">Not without recompilation. glibc and musl have different ABIs, different symbol names, and different behaviors for some functions. A binary compiled against glibc will fail to run on Alpine Linux. The reverse is also true — musl binaries won't run on glibc systems without the musl dynamic linker present.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- OTHER TOOLS -->
+
+  <section class="content-section">
+    <span class="section-eyebrow">// More libc tools</span>
+    <h3>Other Tools</h3>
+    <div class="other-tools">
+      <a href="glibc-vs-musl-performance-tool/" class="other-tool-link">
+        <p class="otl-eye">performance //</p>
+        <span class="otl-name">glibc vs musl Tool</span>
+      </a>
+      <a href="libc-function-explorer/" class="other-tool-link">
+        <p class="otl-eye">reference //</p>
+        <span class="otl-name">Libc Function Explorer</span>
+      </a>
+      <a href="libc-memory-function-tester/" class="other-tool-link">
+        <p class="otl-eye">memory //</p>
+        <span class="otl-name">Memory Function Tester</span>
+      </a>
+      <a href="system-call-wrapper-analyzer/" class="other-tool-link">
+        <p class="otl-eye">syscalls //</p>
+        <span class="otl-name">Syscall Wrapper Analyzer</span>
+      </a>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <p>glibc-vs-musl · free · browser-only · no login</p>
+    <p>benchmark data: etalabs.net + community measurements</p>
+  </div>
+</footer>
+
+<script>
+// ─── BENCHMARK DATA ───
+const CATEGORIES = {
+  memory: {
+    intro: '<strong>Memory allocation performance</strong> — glibc uses ptmalloc, a highly optimized allocator tuned for multi-threaded server workloads. musl uses its own allocator which performs comparably for simple cases but falls behind under high contention. Lower values = faster.',
+    rows: [
+      { op: 'Tiny alloc & free', desc: 'malloc(16) + free — single thread', glibc: 0.002, musl: 0.005, unit: 'µs normalized', winner: 'glibc', verdict: 'glibc is 2.5× faster on tiny allocations. Matters in tight loops creating many small objects.' },
+      { op: 'Big alloc & free', desc: 'malloc(1MB) + free', glibc: 0.016, musl: 0.027, unit: 'µs normalized', winner: 'glibc', verdict: 'glibc wins on large allocations too. musl is ~70% slower here.' },
+      { op: 'Alloc contention (local)', desc: 'Concurrent malloc — thread-local', glibc: 0.041, musl: 0.048, unit: 'µs normalized', winner: 'glibc', verdict: 'glibc performs better under concurrent allocation pressure.' },
+      { op: 'Alloc contention (shared)', desc: 'Concurrent malloc — shared arena', glibc: 0.062, musl: 0.050, unit: 'µs normalized', winner: 'musl', verdict: 'musl wins on shared-arena contention — its simpler locking avoids some ptmalloc overhead.' },
+    ]
+  },
+  strings: {
+    intro: '<strong>String and memory operation performance</strong> — glibc uses hand-tuned SIMD (SSE2/AVX2) implementations for x86_64. musl uses portable C implementations. The gap is significant for compute-heavy workloads.',
+    rows: [
+      { op: 'memset (zero-fill)', desc: 'Zero-fill a buffer', glibc: 0.012, musl: 0.023, unit: 'µs normalized', winner: 'glibc', verdict: 'glibc is ~2× faster — uses AVX2 SIMD for bulk zero-fill.' },
+      { op: 'strlen', desc: 'Measure string length', glibc: 0.048, musl: 0.081, unit: 'µs normalized', winner: 'glibc', verdict: 'glibc wins by ~70% — SIMD processes multiple bytes per cycle.' },
+      { op: 'strchr', desc: 'Find character in string', glibc: 0.028, musl: 0.142, unit: 'µs normalized', winner: 'glibc', verdict: 'Largest gap — glibc is 5× faster. Critical path for string scanning.' },
+      { op: 'strstr', desc: 'Find substring', glibc: 0.088, musl: 0.057, unit: 'µs normalized', winner: 'musl', verdict: 'musl wins — both use two-way algorithm but musl\'s implementation is faster here.' },
+      { op: 'UTF-8 decode (buffered)', desc: 'Decode UTF-8 stream, buffered', glibc: 0.351, musl: 0.073, unit: 'µs normalized', winner: 'musl', verdict: 'musl is 5× faster on UTF-8. glibc routes through slow gconv machinery.' },
+    ]
+  },
+  threads: {
+    intro: '<strong>Threading and synchronization performance</strong> — both use POSIX pthreads backed by Linux futexes. The main differences are in thread creation overhead and stdio locking behavior.',
+    rows: [
+      { op: 'Thread creation/join', desc: 'pthread_create + pthread_join', glibc: 0.142, musl: 0.248, unit: 'ms normalized', winner: 'glibc', verdict: 'glibc creates threads ~75% faster. Matters for thread-per-request servers.' },
+      { op: 'Mutex lock/unlock', desc: 'pthread_mutex_lock + unlock', glibc: 0.046, musl: 0.042, unit: 'µs normalized', winner: 'musl', verdict: 'Effectively tied. Both use Linux futex — musl slightly faster.' },
+      { op: 'stdio putc/getc', desc: 'Buffered I/O — locked', glibc: 0.497, musl: 0.270, unit: 'µs normalized', winner: 'musl', verdict: 'musl is ~2× faster for stdio. glibc\'s locking overhead is higher.' },
+      { op: 'stdio unlocked', desc: 'putc_unlocked / getc_unlocked', glibc: 0.144, musl: 0.200, unit: 'µs normalized', winner: 'glibc', verdict: 'glibc wins when locking is removed. Both improve significantly unlocked.' },
+    ]
+  },
+  startup: {
+    intro: '<strong>Binary size and startup time</strong> — the area where musl has the clearest advantage. Smaller binaries, faster exec, and dramatically smaller static builds.',
+    rows: [
+      { op: 'Self-exec (static)', desc: 'fork + exec a static binary', glibc: 0.457, musl: 0.234, unit: 'ms', winner: 'musl', verdict: 'musl starts static binaries ~2× faster. Critical for short-lived processes and Lambda/serverless.' },
+      { op: 'Self-exec (dynamic)', desc: 'fork + exec a dynamic binary', glibc: 0.864, musl: 0.446, unit: 'ms', winner: 'musl', verdict: 'musl is ~2× faster for dynamic exec too — smaller dynamic linker overhead.' },
+      { op: 'Static hello world', desc: 'printf("hello") — static binary size', glibc: 662, musl: 13, unit: 'KB', winner: 'musl', verdict: 'musl is 50× smaller. glibc cannot be truly statically linked without pulling in a massive dependency graph.' },
+      { op: 'Complete .so set', desc: 'Total dynamic library size', glibc: 7900, musl: 527, unit: 'KB', winner: 'musl', verdict: 'glibc is 15× larger. The size difference drives Alpine\'s Docker image size advantage.' },
+    ]
+  },
+  features: {
+    intro: '<strong>Feature and compatibility comparison</strong> — glibc is the most feature-complete implementation. musl prioritizes standards conformance and correctness over feature breadth.',
+    rows: [
+      { op: 'Binary compatibility', desc: 'Stable ABI across versions', glibc: 1, musl: 1, unit: 'flag', winner: 'tie', verdict: 'Both have stable ABIs. glibc adds symbol versioning; musl does not but maintains full forwards compatibility.' },
+      { op: 'POSIX conformance', desc: 'Standards correctness', glibc: 0.7, musl: 0.95, unit: 'score', winner: 'musl', verdict: 'musl has better POSIX conformance — glibc has GNU extensions that deviate from the standard.' },
+      { op: 'Error handling', desc: 'Behavior on resource exhaustion', glibc: 0.3, musl: 1.0, unit: 'score', winner: 'musl', verdict: 'musl reports failure gracefully; glibc often aborts on OOM in pthread_cancel, SIGEV_THREAD timers, etc.' },
+      { op: 'Feature breadth', desc: 'NIS, RPC, gconv, localedef', glibc: 1.0, musl: 0.4, unit: 'score', winner: 'glibc', verdict: 'glibc includes everything. musl omits legacy features: no POSIX localedef, no Sun RPC, no NIS.' },
+    ]
+  }
+};
+
+let currentCat = 'memory';
+
+function showCat(cat) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + cat).classList.add('active');
+  renderBench(cat);
+}
+
+function renderBench(cat) {
+  const data = CATEGORIES[cat];
+  const body = document.getElementById('benchBody');
+
+  let html = `<div class="bench-intro">${data.intro}</div>`;
+  html += `<table class="bench-table">
+    <thead>
+      <tr>
+        <th>Operation</th>
+        <th class="col-glibc">glibc</th>
+        <th class="col-musl">musl</th>
+        <th>Winner</th>
+        <th class="verdict-cell">Context</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  data.rows.forEach(row => {
+    const isFeature = cat === 'features';
+    let glibcDisplay, muslDisplay, glibcBar, muslBar;
+
+    if (isFeature) {
+      glibcDisplay = row.glibc >= 1 ? '✓ Yes' : row.glibc >= 0.7 ? '~ Partial' : '✗ Limited';
+      muslDisplay = row.musl >= 1 ? '✓ Yes' : row.musl >= 0.7 ? '~ Partial' : '✗ Limited';
+      glibcBar = row.glibc * 100;
+      muslBar = row.musl * 100;
+    } else if (cat === 'startup' && row.op.includes('size')) {
+      const max = Math.max(row.glibc, row.musl);
+      glibcDisplay = row.glibc + ' ' + row.unit;
+      muslDisplay = row.musl + ' ' + row.unit;
+      glibcBar = (row.glibc / max) * 100;
+      muslBar = (row.musl / max) * 100;
+    } else {
+      const max = Math.max(row.glibc, row.musl);
+      glibcDisplay = row.glibc + ' ' + row.unit;
+      muslDisplay = row.musl + ' ' + row.unit;
+      glibcBar = (row.glibc / max) * 100;
+      muslBar = (row.musl / max) * 100;
+    }
+
+    const winnerBadge = row.winner === 'glibc'
+      ? '<span class="verdict-badge vb-glibc">glibc wins</span>'
+      : row.winner === 'musl'
+      ? '<span class="verdict-badge vb-musl">musl wins</span>'
+      : '<span class="verdict-badge vb-tie">tied</span>';
+
+    // For features, higher is better. For perf, lower is better.
+    const glibcBarColor = cat === 'features'
+      ? (row.glibc >= row.musl ? 'var(--blue)' : 'var(--text-dim)')
+      : (row.winner === 'glibc' ? 'var(--blue)' : 'var(--text-dim)');
+    const muslBarColor = cat === 'features'
+      ? (row.musl >= row.glibc ? 'var(--green)' : 'var(--text-dim)')
+      : (row.winner === 'musl' ? 'var(--green)' : 'var(--text-dim)');
+
+    html += `<tr>
+      <td>
+        <div class="op-name">${row.op}</div>
+        <div class="op-desc">${row.desc}</div>
+      </td>
+      <td>
+        <div class="val-cell ${row.winner === 'glibc' ? 'winner win-glibc' : ''}">${glibcDisplay}</div>
+        <div class="bar-wrap">
+          <div class="bar-bg"><div class="bar-fill" style="width:${glibcBar.toFixed(0)}%;background:${glibcBarColor}"></div></div>
+        </div>
+      </td>
+      <td>
+        <div class="val-cell ${row.winner === 'musl' ? 'winner win-musl' : ''}">${muslDisplay}</div>
+        <div class="bar-wrap">
+          <div class="bar-bg"><div class="bar-fill" style="width:${muslBar.toFixed(0)}%;background:${muslBarColor}"></div></div>
+        </div>
+      </td>
+      <td>${winnerBadge}</td>
+      <td class="verdict-cell" style="font-size:11px;color:var(--text-muted);line-height:1.5;">${row.verdict}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function toggleFaq(btn) {
+  btn.parentElement.classList.toggle('open');
+}
+
+// Init
+renderBench('memory');
+</script>
 
 </body>
 </html>
